@@ -32,7 +32,7 @@ count=zeros(1,swarm_size);
 c=1.49445;
 iteration=1;
 Rmax=0.5;
-Rmin=0.1;
+Rmin=0.4;
 G=7;
 
 while iteration<=max_iteration & fitcount<=MaxFES
