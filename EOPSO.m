@@ -1,4 +1,4 @@
-function [Gbest_val,fitness_record,pos]= EOPSO(fhd,MaxFES,swarm_size,dimension,LB,UB,varargin)
+function [Gbest_val,everyfit,diversity]= EOPSO(fhd,MaxFES,N,D,LB,UB,varargin)
 % Gbest_val: global best position's fitness
 % Pbest_val: personal best position's fitness
 % fitness_record:  storage convergence curve
@@ -7,100 +7,118 @@ function [Gbest_val,fitness_record,pos]= EOPSO(fhd,MaxFES,swarm_size,dimension,L
 % dimension: search dimension
 % LB/UP: lower/upper search boundry
 % pos: position
-% pos: velocity
 % inw: inertia weight
+
 rand('state',sum(100*clock));
 
-fitness_record=zeros(1,MaxFES);
-max_iteration=ceil(MaxFES/swarm_size);
-vel_max=(UB-LB)/2;
-vel_min=-vel_max;
-pos=rand(swarm_size,dimension).*(UB-LB)+LB;
-vel=rand(swarm_size,dimension).*(vel_max-vel_min)+vel_min;
-fitness=zeros(swarm_size,1);
-for i=1:swarm_size
+everyfit=zeros(1,MaxFES);
+Maxiter=ceil(MaxFES/N);
+velocityelocity_max=(UB-LB)/4;
+velocityelocity_min=-velocityelocity_max;
+pos=rand(N,D).*(UB-LB)+LB;
+velocity=rand(N,D).*(velocityelocity_max-velocityelocity_min)+velocityelocity_min;
+fitness=zeros(N,1);
+for i=1:N
     fitness(i)=feval(fhd,pos(i,:)',varargin{:});
 end
-fitcount=swarm_size;
-fitness_record(1:fitcount)=min(fitness);
+fitcount=N;
+everyfit(1:fitcount)=min(fitness);
 [min_val,min_index]=min(fitness);
 Gbest=pos(min_index,:);
 Gbest_val=min_val;
 Pbest=pos;
 Pbest_val=fitness;
-count=zeros(1,swarm_size);
+count=zeros(1,N);
 c=1.49445;
-iteration=1;
-Rmax=0.5;
-Rmin=0.4;
+iter=1;
+diversity=zeros(1,Maxiter);
+K1=0.5;
+K2=0.4;
 G=7;
 
-while iteration<=max_iteration & fitcount<=MaxFES
-    inw=0.9-0.5*(iteration/max_iteration);
-    iteration=iteration+1;
-    K=ceil(swarm_size*Rmax-(Rmax-Rmin)*iteration/max_iteration*swarm_size);
+while iter<=Maxiter & fitcount<=MaxFES
+
+
+    diversity(iter)=sum(sqrt(sum((pos-mean(pos)).^2,2)))/N;
+    inw=0.9-0.5*(iter/Maxiter);
+    iter=iter+1;
+
+    elite_num=ceil(N*K1-iter/Maxiter*(K1-K2)*N);
+
     [~,index]=sort(fitness);
-    OO=zeros(1,dimension);
-    for i=1:K
+    OO=zeros(1,D);
+    for i=1:elite_num
         if fitness(index(i))>0
             f(i)=1/(fitness(index(i))+1);
         else
             f(i)=1+abs(fitness(index(i)));
         end
     end
-    
-    elite=zeros(1,K);
-    elite(1:K)=index(1:K);
-    ordinary=zeros(1,swarm_size-K);
-    ordinary(1:swarm_size-K)=index(K+1:swarm_size);
-    
-    for i=1:K
+
+    elite=zeros(1,elite_num);
+    elite(1:elite_num)=index(1:elite_num);
+    ordinary=zeros(1,N-elite_num);
+    ordinary(1:N-elite_num)=index(elite_num+1:N);
+
+    for i=1:elite_num
         OO=OO+f(i)/sum(f)*Pbest(index(i),:);
     end
-    
-    for i=1:swarm_size
+
+    for i=1:N
+
         ranknum=index(i);
-        if ranknum<=K
-            vel(i,:)=inw.*vel(i,:)+c*rand(1,dimension).*(Pbest(i,:)-pos(i,:));
+
+        if ranknum<=elite_num
+            velocity(i,:)=inw.*velocity(i,:)+c*rand(1,D).*(Pbest(i,:)-pos(i,:));
         else
-            vel(i,:)=inw.*vel(i,:)+c*rand(1,dimension).*(OO-pos(i,:));
+            velocity(i,:)=inw.*velocity(i,:)+c*rand(1,D).*(OO-pos(i,:));
         end
-        vel(i,vel(i,:)>vel_max) = vel_max;
-        vel(i,vel(i,:)<vel_min) = vel_min;
-        pos(i,:) = pos(i,:) + vel(i,:);
+
+        velocity(i,velocity(i,:)>velocityelocity_max) = velocityelocity_max;
+        velocity(i,velocity(i,:)<velocityelocity_min) = velocityelocity_min;
+        pos(i,:) = pos(i,:) + velocity(i,:);
         pos(i,pos(i,:)>UB) = UB;
         pos(i,pos(i,:)<LB) = LB;
         fitness(i)=feval(fhd,pos(i,:)',varargin{:});
         fitcount=fitcount+1;
-        fitness_record(fitcount)=min(fitness_record(fitcount-1),fitness(i));
+        everyfit(fitcount)=min(everyfit(fitcount-1),fitness(i));
+
+
         Pbest(i,:)=(fitness(i)<Pbest_val(i))*pos(i,:)+(fitness(i)>=Pbest_val(i))*Pbest(i,:);
         Pbest_val(i)=(fitness(i)<Pbest_val(i))*fitness(i)+(fitness(i)>=Pbest_val(i))*Pbest_val(i);
         count(i)=(fitness(i)>Pbest_val(i))+(fitness(i)>Pbest_val(i))*count(i);
+
         Gbest=(fitness(i)<Gbest_val)*pos(i,:)+(fitness(i)>=Gbest_val)*Gbest;
         Gbest_val=(fitness(i)<Gbest_val)*fitness(i)+(fitness(i)>=Gbest_val)*Gbest_val;
+
+
         if count(i)>=G
             count(i)=0;
-            r1=(ranknum<=K)*ordinary(randperm(swarm_size-K,1))+(1-(ranknum<=K))*elite(randperm(K,1));
-            RR=rand(1,dimension);
-            PX=RR.*Pbest(i,:)+(1-RR).*Pbest(r1,:)+2*(rand(1,dimension)-0.5).*(Pbest(i,:)-Pbest(r1,:));
-            PX_fit=feval(fhd,PX',varargin{:});
+            r1=(ranknum<=elite_num)*ordinary(randperm(N-elite_num,1))+(1-(ranknum<=elite_num))*elite(randperm(elite_num,1));
+            RR=rand(1,D);
+            Ppos=RR.*Pbest(i,:)+(1-RR).*Pbest(r1,:)+2*(rand(1,D)-0.5).*(Pbest(i,:)-Pbest(r1,:));
+            Ppos_fit=feval(fhd,Ppos',varargin{:});
             fitcount=fitcount+1;
-            fitness_record(fitcount)=min(fitness_record(fitcount-1),PX_fit);
-            pos(i,:)=PX*(PX_fit<fitness(i))+pos(i,:)*(1-(PX_fit<fitness(i)));
-            fitness(i)=PX_fit*(PX_fit<fitness(i))+fitness(i,:)*(1-(PX_fit<fitness(i)));
+            everyfit(fitcount)=min(everyfit(fitcount-1),Ppos_fit);
+
+            pos(i,:)=Ppos*(Ppos_fit<fitness(i))+pos(i,:)*(1-(Ppos_fit<fitness(i)));
+            fitness(i)=Ppos_fit*(Ppos_fit<fitness(i))+fitness(i,:)*(1-(Ppos_fit<fitness(i)));
+            Pbest(i,:)=Ppos*(Ppos_fit<Pbest_val(i))+Pbest(i,:)*(1-(Ppos_fit<Pbest_val(i)));
+            Pbest_val(i)=Ppos_fit*(Ppos_fit<Pbest_val(i))+Pbest_val(i,:)*(1-(Ppos_fit<Pbest_val(i)));
         end
-        vel(i,:)= (abs(vel(i,:))>10^(-4)).* vel(i,:)+(1-(abs(vel(i,:))>10^(-4))).*normrnd(0,1,[1,dimension]);
-        
+        if  iter<=0.9*Maxiter
+            velocity(i,:)= (abs(velocity(i,:))>10^(-4)).* velocity(i,:)+(1-(abs(velocity(i,:))>10^(-4))).*normrnd(0,1,[1,D]);
+        end
     end
-    
+
     if fitcount>=MaxFES
         break;
     end
-    if (iteration==max_iteration) & (fitcount<MaxFES)
-        iteration=iteration-1;
+    if (iter==Maxiter) & (fitcount<MaxFES)
+        iter=iter-1;
     end
 end
-fitness_record=fitness_record(1:MaxFES);
-Gbest_val=fitness_record(1,MaxFES);
+everyfit=everyfit(1:MaxFES);
+Gbest_val=everyfit(1,MaxFES);
 end
 
