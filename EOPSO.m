@@ -46,7 +46,6 @@ while iter<=Maxiter & fitcount<=MaxFES
     elite_num=ceil(N*K1-iter/Maxiter*(K1-K2)*N);
 
     [~,index]=sort(fitness);
-    [~,index]=sort(index);
     OO=zeros(1,D);
     for i=1:elite_num
         if fitness(index(i))>0
